@@ -5,10 +5,10 @@ from telegram.ext.callbackcontext import CallbackContext
 from telegram.ext.commandhandler import CommandHandler
 from telegram.ext.messagehandler import MessageHandler
 from telegram.ext import CallbackQueryHandler
-from telegram.ext.filters import Filters
 import logging
 import re
-import os
+import json
+import ast
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -30,16 +30,29 @@ You can also add a custom title and web preview image.
 /donate - Support the developer
 """)
 
+
+def has_link_shortener(url):
+    link_shorteners = ['bit.ly', 'tinyurl.com', 'ow.ly', 'tiny.cc', 'is.gd', 'shorte.st', 'adf.ly', 'adcrun.ch',
+                       'shrinkme.io', 'cutt.ly', ]
+    # Check if any of the link shorteners are in the URL
+    for shortener in link_shorteners:
+        if shortener in url:
+            return True
+    return False
+
+
 # Button for send the link to channel prompt
 send_button = InlineKeyboardButton(text="Send ✅", callback_data="yes")
 keyboard1 = [[send_button]]
 reply_markup_send = InlineKeyboardMarkup(keyboard1)
 
 # Buttons to select the link to confirm
-keyboard = [[InlineKeyboardButton("Option 1", callback_data="1"), InlineKeyboardButton("Option 2", callback_data="2")],[InlineKeyboardButton("Option 3", callback_data="3")]]
+keyboard = [[InlineKeyboardButton("Option 1", callback_data="1"), InlineKeyboardButton("Option 2", callback_data="2")],
+            [InlineKeyboardButton("Option 3", callback_data="3")]]
 reply_markup_select = InlineKeyboardMarkup(keyboard)
 
 links = []
+
 
 def button_handler(update, context):
     query = update.callback_query
@@ -54,38 +67,44 @@ def help(update: Update, context: CallbackContext):
     update.message.reply_text("Your Message")
 
 
-def extract_url(a:str, update: Update, context: CallbackContext):
+def extract_url(a, update: Update, context: CallbackContext):
+    # s = ast.literal_eval(json.dumps(str(a), indent=2))
+    # for i in s.split(","):
+    #     update.message.reply_text(i)
     if a.caption:
         raw = a.caption_html_urled
     else:
         raw = a.text_html_urled
     if "href" in raw:
         if raw.count("href") >= 2:
-            m1 = update.message.reply_text("🔄 Processing...")
-            m2 = update.message.reply_text("⛓ Multiple Links Found")
+            m1 = context.bot.send_message(chat_id=a.chat_id, text="🔄 Processing...", reply_to_message_id=a.message_id)
+            context.bot.edit_message_text(chat_id=m1.chat_id, message_id=m1.message_id, text="🔎 Found multiple links")
             link_pattern = r'href="([^"]*)"'
             found_link = re.findall(link_pattern, raw)
             found_link = list(set(found_link))
             link_pattern2 = r"(?:[?&](?:utm_(?:source|medium|campaign|term|content)|referral|cid|start|cn|z|igshid)|=.*|#.*)"
             clean_links = []
             for i in found_link:
-                clean_links.append(re.sub(link_pattern2, "/=/ 3 ", i).split('/=/ 3 ')[0])
-            numbered_links = '\n'.join(['<b>' + str(i+1) + '.</b> ' + item for i, item in enumerate(clean_links)])
-            context.bot.delete_message(chat_id=m1.chat_id, message_id=m1.message_id)
-            context.bot.delete_message(chat_id=m2.chat_id, message_id=m2.message_id)
-            update.message.reply_text(f"🔗 <b>Links Found:</b>\n\n{numbered_links}", disable_web_page_preview = True, parse_mode="HTML", reply_markup=reply_markup_select)
+                clean_links.append(re.sub(link_pattern2, "/=/ 3 ", i).split('/=/ 3 ')[0].lower())
+            numbered_links = '\n'.join(['<b>' + str(i + 1) + '.</b> ' + item for i, item in enumerate(clean_links)])
+            context.bot.edit_message_text(chat_id=m1.chat_id, message_id=m1.message_id,
+                                          text=f"🔗 <b>Links Found:</b>\n\n{numbered_links}",
+                                          disable_web_page_preview=True,
+                                          parse_mode="HTML", reply_markup=reply_markup_select)
             return clean_links
         else:
-            m1 = update.message.reply_text("🔄 Processing...")
+            m1 = update.message.reply_text("🔄 Processing...", reply_to_message_id=a.message_id)
             link_pattern = r'href="([^"]*)"'
             found_link = re.findall(link_pattern, raw)
             link_pattern2 = r"(?:[?&](?:utm_(?:source|medium|campaign|term|content)|referral|cid|start|cn|z|igshid|m)|=.*|#.*)"
-            clean_link = re.sub(link_pattern2, "", found_link[0])
-            context.bot.delete_message(chat_id=m1.chat_id, message_id=m1.message_id)
-            update.message.reply_text(f"🔗 <b>Link Found:</b>\n\n{clean_link}", disable_web_page_preview = True, parse_mode="HTML", reply_markup=reply_markup_send)
+            clean_link = re.sub(link_pattern2, "", found_link[0]).lower()
+            context.bot.edit_message_text(chat_id=m1.chat_id, message_id=m1.message_id,
+                                          text=f"🔗 <b>Link Found:</b>\n\n{clean_link}",
+                                          disable_web_page_preview=True,
+                                          parse_mode="HTML", reply_markup=reply_markup_send)
             return clean_link
     else:
-        update.message.reply_text("❎<b> No Link(s) Found</b>", parse_mode="HTML")
+        update.message.reply_text("❎<b> No Link(s) Found</b>", parse_mode="HTML", reply_to_message_id=a.message_id)
 
 
 def extract(update: Update, context: CallbackContext):
