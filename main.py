@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-updater = Updater("5927932816:AAHX9Rkz7RfGisGBEH8v419ZrwflbitxK-8", use_context=True)
+updater = Updater(key, use_context=True)
 
 
 def start(update: Update, context: CallbackContext):
